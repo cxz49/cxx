@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AI 助手</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root{--bg:#0a0a0a;--t:#e8e8ec;--t2:#98989e;--a:#4a90d9;--b:rgba(255,255,255,0.08)}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,sans-serif;background:var(--bg);color:var(--t);height:100vh;display:flex;flex-direction:column;max-width:700px;margin:0 auto;overflow:hidden}
+    .hd{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;flex-shrink:0}
+    .hd-name{font-size:14px;font-weight:600}
+    .hd-btn{width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,0.06);color:var(--t);font-size:13px;cursor:pointer}
+    .chat{flex:1;overflow-y:auto;padding:6px 10px 14px;-webkit-overflow-scrolling:touch}
+    .chat::-webkit-scrollbar{width:0}
+    .welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:45vh;text-align:center;color:var(--t2);font-size:13px;line-height:1.8}
+    .msg{margin-bottom:5px;max-width:88%;animation:fade .25s;display:flex;gap:5px;align-items:flex-end}
+    @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .msg.user{margin-left:auto;flex-direction:row-reverse}
+    .bub{padding:7px 10px;border-radius:14px;line-height:1.45;word-break:break-word;font-size:13px}
+    .user .bub{background:var(--a);color:#fff;border-bottom-right-radius:3px}
+    .assistant .bub{background:rgba(255,255,255,0.05);border:1px solid var(--b);border-bottom-left-radius:3px}
+    .bub p{margin:2px 0}.bub pre{background:rgba(0,0,0,0.4);padding:6px;border-radius:6px;overflow-x:auto;font-size:11px;margin:3px 0}.bub code{font-size:11px;background:rgba(255,255,255,0.08);padding:1px 3px;border-radius:3px}
+    .typing::after{content:'|';animation:blink 1s infinite;color:var(--a)}@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+    .act{margin-top:2px}.act-btn{font-size:9px;padding:2px 7px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--t2);cursor:pointer}
+    .load{display:flex;gap:3px;padding:3px 0}.load span{width:5px;height:5px;border-radius:50%;background:var(--t2);animation:dot 1.4s infinite}.load span:nth-child(2){animation-delay:.2s}.load span:nth-child(3){animation-delay:.4s}@keyframes dot{0%,80%,100%{transform:scale(.5);opacity:.4}40%{transform:scale(1);opacity:1}}
+    .toolbar{display:flex;gap:3px;padding:0 10px 5px;flex-wrap:wrap}.chip{font-size:9px;padding:4px 8px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--t2);cursor:pointer}.chip.active{background:rgba(74,144,217,0.15);color:var(--a);border-color:var(--a)}
+    .input-area{display:flex;align-items:flex-end;gap:5px;padding:5px 10px;padding-bottom:max(5px,env(safe-area-inset-bottom))}
+    .input-wrap{flex:1;display:flex;align-items:flex-end;background:rgba(30,30,32,0.92);border-radius:16px;border:1px solid var(--b);padding:2px}
+    #mi{flex:1;border:none;background:transparent;padding:6px 8px;font-size:13px;color:var(--t);outline:none;resize:none;max-height:70px;line-height:1.4}
+    #mi::placeholder{color:var(--t2)}
+    .sb{width:32px;height:32px;border-radius:50%;border:none;background:var(--a);color:#fff;font-size:14px;cursor:pointer;flex-shrink:0}
+    .sb:disabled{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.3)}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <span class="hd-name">🤖 DeepSeek 助手</span>
+    <div>
+      <button class="hd-btn" id="roleBtn" title="角色扮演">🎭</button>
+      <button class="hd-btn" id="clearBtn" title="清空">🗑</button>
+    </div>
+  </div>
+  <div class="chat" id="chatArea">
+    <div class="welcome" id="welcomeWrap">✨<br>你好，我是AI助手<br>随时为你提供帮助</div>
+  </div>
+  <div class="toolbar">
+    <span class="chip" id="mmChip">🧠导图</span>
+    <span class="chip" id="imgChip">📷图片</span>
+    <input type="file" id="imgInput" accept="image/*" style="display:none">
+  </div>
+  <div class="input-area">
+    <div class="input-wrap">
+      <textarea id="mi" rows="1" placeholder="输入消息..."></textarea>
+      <button class="sb" id="sb">↑</button>
+    </div>
+  </div>
+
+  <script>
+    // ===== 👇 你的配置（只改这两行）=====
+    const DEEPSEEK_KEY = 'sk -855c2c84b6f44685908843e2c6961e2c';  // 改成你的 DeepSeek API Key
+    const ACCESS_PW = 'cxzhenlihai';       // 设置一个访问密码
+    
+    // ===== 以下不用改 =====
+    const SK = 'a_msgs', PK = 'a_ok';
+    let msgs = [], busy = 0;
+    const chatArea = document.getElementById('chatArea');
+    const welcome = document.getElementById('welcomeWrap');
+    const mi = document.getElementById('mi');
+    const sb = document.getElementById('sb');
+    
+    if(sessionStorage.getItem(PK)!=='1') {
+      let pw = prompt('🔐 请输入访问密码：');
+      if(pw === ACCESS_PW) sessionStorage.setItem(PK,'1');
+      else { document.body.innerHTML = '<div style="color:#fff;text-align:center;padding:50px">密码错误</div>'; throw new Error('密码错误'); }
+    }
+    
+    function loadM() {
+      try {
+        let s = localStorage.getItem(SK);
+        if(s) { let p = JSON.parse(s); if(p.length) { msgs=p; chatArea.innerHTML=''; welcome.style.display='none'; msgs.forEach(m=>{ if(m.role==='user') rUser(m.content); else rAI(m.content,1); }); return; } }
+      } catch(e) {}
+      msgs = [{role:'system',content:'你是全能助手，回答专业深入。'}];
+    }
+    
+    function saveM() { try { localStorage.setItem(SK, JSON.stringify(msgs.slice(-60))); } catch(e) {} }
+    function scroll() { chatArea.scrollTop = chatArea.scrollHeight; }
+    
+    function rUser(c) {
+      welcome.style.display='none';
+      let d = document.createElement('div'); d.className='msg user';
+      d.innerHTML = '<div class="bub">'+String(c).replace(/\n/g,'<br>')+'</div>';
+      chatArea.appendChild(d); scroll();
+    }
+    
+    function rAI(c, skip) {
+      welcome.style.display='none';
+      let d = document.createElement('div'); d.className='msg assistant';
+      let b = document.createElement('div'); b.className='bub';
+      b.innerHTML = marked.parse(String(c));
+      d.appendChild(b);
+      if(!skip) {
+        let act = document.createElement('div'); act.className='act';
+        let btn = document.createElement('button'); btn.className='act-btn'; btn.textContent='📋复制';
+        btn.onclick = () => { navigator.clipboard.writeText(c).then(()=>{ btn.textContent='✅'; setTimeout(()=>btn.textContent='📋复制',1500); }); };
+        act.appendChild(btn); d.appendChild(act);
+      }
+      chatArea.appendChild(d); scroll();
+      return b;
+    }
+    
+    async function send() {
+      let txt = mi.value.trim();
+      if(!txt || busy) return;
+      busy = 1; sb.textContent='■'; sb.disabled=1;
+      
+      rUser(txt);
+      msgs.push({role:'user', content:txt});
+      saveM();
+      mi.value=''; mi.style.height='auto';
+      
+      let d = document.createElement('div'); d.className='msg assistant';
+      let b = document.createElement('div'); b.className='bub';
+      b.innerHTML = '<div class="load"><span></span><span></span><span></span></div>';
+      d.appendChild(b); chatArea.appendChild(d); scroll();
+      
+      let full='', started=0;
+      try {
+        let res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+DEEPSEEK_KEY},
+          body:JSON.stringify({model:'deepseek-chat', messages:msgs, stream:1, temperature:0.8, max_tokens:8192})
+        });
+        if(!res.ok) throw new Error('请求失败('+res.status+')');
+        
+        let reader = res.body.getReader(), dec = new TextDecoder();
+        while(1) {
+          let {done,value} = await reader.read();
+          if(done) break;
+          dec.decode(value,{stream:1}).split('\n').forEach(line => {
+            if(line.startsWith('data: ')) {
+              let dd = line.slice(6);
+              if(dd==='[DONE]') return;
+              try {
+                let delta = JSON.parse(dd).choices?.[0]?.delta?.content;
+                if(delta) { full+=delta; if(!started){b.innerHTML='';started=1;} b.innerHTML=marked.parse(full); b.classList.add('typing'); scroll(); }
+              } catch(e) {}
+            }
+          });
+        }
+        b.classList.remove('typing');
+        if(full) {
+          msgs.push({role:'assistant',content:full}); saveM();
+          let act = document.createElement('div'); act.className='act';
+          let btn = document.createElement('button'); btn.className='act-btn'; btn.textContent='📋复制';
+          btn.onclick = () => { navigator.clipboard.writeText(full).then(()=>{ btn.textContent='✅'; setTimeout(()=>btn.textContent='📋复制',1500); }); };
+          act.appendChild(btn); d.appendChild(act);
+        }
+      } catch(e) { b.innerHTML='❌ '+e.message; }
+      busy=0; sb.textContent='↑'; sb.disabled=0; mi.focus();
+    }
+    
+    sb.onclick = send;
+    mi.onkeydown = e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } };
+    mi.oninput = () => { mi.style.height='auto'; mi.style.height=Math.min(mi.scrollHeight,70)+'px'; };
+    document.getElementById('clearBtn').onclick = () => {
+      if(confirm('清空对话？')){ msgs=[{role:'system',content:'你是全能助手'}]; localStorage.removeItem(SK); chatArea.innerHTML=''; welcome.style.display='flex'; }
+    };
+    document.getElementById('roleBtn').onclick = () => {
+      let r = prompt('🎭 输入角色设定：\n如：你是李白，正在月下独酌...');
+      if(r) { msgs=[{role:'system',content:r}]; localStorage.removeItem(SK); chatArea.innerHTML=''; welcome.style.display='flex'; }
+    };
+    document.getElementById('mmChip').onclick = () => {
+      mi.value = '请为「'+(mi.value.trim()||'主题')+'」生成思维导图，用mermaid格式'; mi.focus();
+    };
+    document.getElementById('imgChip').onclick = () => document.getElementById('imgInput').click();
+    document.getElementById('imgInput').onchange = function(e) {
+      Array.from(e.target.files).forEach(f => {
+        let r = new FileReader();
+        r.onload = ev => {
+          msgs.push({role:'user', content:[{type:'image_url',image_url:{url:ev.target.result}},{type:'text',text:'请分析这张图片'}]});
+          saveM(); rUser('[图片]');
+          setTimeout(()=>send(), 100);
+        };
+        r.readAsDataURL(f);
+      });
+    };
+    
+    loadM();
+  </script>
+</body>
+</html>
